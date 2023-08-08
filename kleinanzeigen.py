@@ -117,9 +117,9 @@ class Kleinanzeigen:
             return url
 
         def __init_search_pages(self):
-            self.offers_indices = []
             i = 0
             page_i = 0
+            max_page = None
             while True:
                 # Determine the current page number to scrape
                 if self.pages:
@@ -137,7 +137,8 @@ class Kleinanzeigen:
                 print(url_i)
                 page = WebScraper(url_i)
                 offer_indices_i = self.__get_offer_index(page.content.split('\n'))
-                max_page = self.__get_max_page(page.content)
+                if not max_page:
+                    max_page = self.__get_max_page(page.content)
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current page:', page_i)
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current max page:', max_page)
 
