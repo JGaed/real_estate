@@ -93,3 +93,15 @@ def chunkIt(seq, num):
         last += avg
 
     return out
+
+def get_floats(string):
+    numbers = []
+    string = string.split()
+    string = [x.replace(',','').replace('.','') for x in string]
+    for x in string:
+        try:
+            numbers.append(float(x))
+        except:
+            None
+        
+    return numbers

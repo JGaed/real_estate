@@ -9,10 +9,12 @@ from webscraper import WebScraper
 import dateutil.parser as dparser
 import pgeocode
 import datetime
+import numpy as np
 
 class Kleinanzeigen:
     SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
     OFFER_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-anzeige/{index}'
+    OFFERS_PER_PAGE = 25
 
     @classmethod
     def create_df(cls, postalcode, radius=None, pages=None, end_index=None):
@@ -118,7 +120,6 @@ class Kleinanzeigen:
             self.offers_indices = []
             i = 0
             page_i = 0
-
             while True:
                 # Determine the current page number to scrape
                 if self.pages:
@@ -163,14 +164,19 @@ class Kleinanzeigen:
 
             page.quit()
 
+        # def __get_max_page(self, content):
+        #     pages_lines_start =  misc.get_lines(content.split('\n'), "srchrslt-pagination")[1][0]
+        #     pages_lines_end =  [x for x in misc.get_lines(content.split('\n'), "</div>")[1] if x > pages_lines_start][1]
+        #     if len(misc.get_lines(content.split('\n')[pages_lines_start:pages_lines_end], "seite:")[0]) > 0:
+        #         max_page = misc.get_numbers(misc.get_lines(content.split('\n')[pages_lines_start:pages_lines_end], "seite:")[0][-1])[1]
+        #     else:
+        #         max_page = 1
+        #     return max_page
+        
         def __get_max_page(self, content):
-            pages_lines_start =  misc.get_lines(content.split('\n'), "srchrslt-pagination")[1][0]
-            pages_lines_end =  [x for x in misc.get_lines(content.split('\n'), "</div>")[1] if x > pages_lines_start][1]
-            if len(misc.get_lines(content.split('\n')[pages_lines_start:pages_lines_end], "seite:")[0]) > 0:
-                max_page = misc.get_numbers(misc.get_lines(content.split('\n')[pages_lines_start:pages_lines_end], "seite:")[0][-1])[1]
-            else:
-                max_page = 1
-            return max_page
+            total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-2]
+            max_page = np.rint(total_offers/Kleinanzeigen.OFFERS_PER_PAGE)
+            return int(max_page)
         
         def __get_offer_index(self, content, filter_out_top=True):
             self.offer_lines = misc.get_lines(content, 'data-adid=')[1]
