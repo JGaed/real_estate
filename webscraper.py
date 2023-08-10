@@ -34,7 +34,7 @@ class WebScraper:
         self.chrome_version = int(os.popen('chromium --version').read().split()[1].split('.')[0])
         
         # Configure Chrome options
-        chrome_options = webdriver.ChromeOptions()
+        chrome_options = uc.ChromeOptions()
         if self.proxy:
             chrome_options.add_argument('--proxy-server={}'.format(self.proxy))
         chrome_options.add_argument('--blink-settings=imagesEnabled=false')

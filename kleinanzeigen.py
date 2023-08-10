@@ -47,7 +47,7 @@ class Kleinanzeigen:
         """
         columns = ('postalcode', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp')
         offers = cls.SearchPage(postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
-        offers_in_database = [int(x[0]) for x in misc.MySQL.get_table('id', 'Kleinanzeigen')]
+        offers_in_database = [int(x[0]) for x in misc.MySQL.get_table('Kleinanzeigen', 'id')]
         new_offers = [x for x in offers.offers_indices if x not in offers_in_database]
         print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping offers: {}'.format(len(new_offers)))
         print(new_offers)
@@ -141,16 +141,14 @@ class Kleinanzeigen:
                     max_page = self.__get_max_page(page.content)
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current page:', page_i)
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current max page:', max_page)
+                self.offers_indices += offer_indices_i
 
                 # Check if end_index condition is met
                 if self.end_index:
                     if type(self.end_index) == int:
                         self.end_index = [self.end_index]
                     if any(x in self.end_index for x in offer_indices_i):
-                        self.offers_indices += offer_indices_i[:offer_indices_i.index(self.end_index)]
                         break
-
-                self.offers_indices += offer_indices_i
 
                 # Check if max_number condition is met
                 if self.max_number and len(self.offers_indices) >= self.max_number:

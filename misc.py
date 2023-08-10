@@ -4,6 +4,7 @@
 import re
 import mysql.connector
 from config import mysql_host, mysql_password, mysql_user
+import pandas as pd
 
 class MySQL:
     """
@@ -37,14 +38,26 @@ class MySQL:
         mycursor.close()
         mydb.close()
 
-    def get_table(table, database):
+    def get_table(table, column):
         mydb = MySQL.connect()
         mycursor = mydb.cursor()
-        mycursor.execute("SELECT {table} FROM {database}".format(table=table, database=database))
+        mycursor.execute("SELECT {column} FROM {table}".format(column = column, table=table))
         table_values = mycursor.fetchall()
         mycursor.close()
         mydb.close()
         return table_values
+    
+    def get_dataframe(table, column):
+        try:
+            mydb = MySQL.connect()
+            query = "Select {column} from {table};".format(column = column, table=table)
+            result_dataFrame = pd.read_sql(query,mydb)
+            mydb.close() #close the connection
+            return result_dataFrame
+        except Exception as e:
+            mydb.close()
+            print(str(e))
+        
 
 def get_numbers(string_input):
     """
