@@ -148,29 +148,23 @@ class Kleinanzeigen:
                     if type(self.end_index) == int:
                         self.end_index = [self.end_index]
                     if any(x in self.end_index for x in offer_indices_i):
+                        print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] End index found')
                         break
 
                 # Check if max_number condition is met
                 if self.max_number and len(self.offers_indices) >= self.max_number:
                     self.offers_indices = self.offers_indices[:self.max_number]
+                    print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Max number of entries reached')
                     break
 
                 # Check if the end of pages or maximum page count is reached
                 if page_i == max_page or (self.pages and i == len(self.pages)):
+                    print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Max page number reached')
                     break
 
                 page.close()
 
             page.quit()
-
-        # def __get_max_page(self, content):
-        #     pages_lines_start =  misc.get_lines(content.split('\n'), "srchrslt-pagination")[1][0]
-        #     pages_lines_end =  [x for x in misc.get_lines(content.split('\n'), "</div>")[1] if x > pages_lines_start][1]
-        #     if len(misc.get_lines(content.split('\n')[pages_lines_start:pages_lines_end], "seite:")[0]) > 0:
-        #         max_page = misc.get_numbers(misc.get_lines(content.split('\n')[pages_lines_start:pages_lines_end], "seite:")[0][-1])[1]
-        #     else:
-        #         max_page = 1
-        #     return max_page
         
         def __get_max_page(self, content):
             total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-2]
