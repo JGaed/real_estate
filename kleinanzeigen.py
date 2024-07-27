@@ -72,7 +72,7 @@ class Kleinanzeigen:
             postalcode (str): The postal code to search for properties.
             radius (int): The search radius in kilometers from the given postal code.
             pages (list[int]): List of page numbers to scrape.
-            end_index (int): The end index to stop scraping.
+            end_index (int/list): The end index to stop scraping.
             max_number (int): Maximum number of entries to scrape.
         
         Attributes:
@@ -249,9 +249,7 @@ class Kleinanzeigen:
                 num2 = misc.get_numbers(misc.get_lines(self.content, 'adPrice:')[0][0])[1]
                 self.price = float(int(num1) + (int(num2) / 100))
             except:
-                print('[PYTHON][KLEINANZ][OFFER_PAGE][POSTALCODE][WARNING] No Price found: {}'.format(self.url))
-                self.price = 999999999.99
-            
+                print('[PYTHON][KLEINANZ][OFFER_PAGE][POSTALCODE][WARNING] No Price found: {}'.format(self.index))
 
         def __get_postalcode(self):
             """Extract and store the postal code of the property."""

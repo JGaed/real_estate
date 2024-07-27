@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    offers_in_database = [int(x[0]) for x in misc.MySQL.get_table('Kleinanzeigen', ['id', 'timestamp'])]
+    offers_in_database = misc.MySQL.get_table('Kleinanzeigen', ['id', 'timestamp'], sort_by='timestamp', max_entries=10)
 
     Kleinanzeigen.to_mysql(20359, radius=20, max_number=400)
 

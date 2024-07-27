@@ -38,15 +38,22 @@ class MySQL:
         mycursor.close()
         mydb.close()
 
-    def get_table(table, column):
+    def get_table(table, column, sort_by=None, max_entries=None):
+        print(table, column, sort_by, max_entries)
         mydb = MySQL.connect()
         mycursor = mydb.cursor()
+        query_str = ''
         if type(column)==str:
-            mycursor.execute("SELECT {column} FROM {table}".format(column = column, table=table))
+            query_str += ("SELECT {column} FROM {table}".format(column = column, table=table))
         if type(column)==list:
-            mycursor.execute("SELECT {column} FROM {table}".format(column = ', '.join(column), table=table))
-        mycursor.fetchall()
-        table_values = mycursor.fetchall()
+            query_str += ("SELECT {column} FROM {table}".format(column = ', '.join(column), table=table))
+        if sort_by:
+            query_str += (' ORDER BY {}'.format(sort_by))
+        if max_entries:
+            query_str += (' Limit {}'.format(str(max_entries)))
+        print(query_str)
+        mycursor.execute(query_str)
+        table_values = mycursor.fetchall()    
         mycursor.close()
         mydb.close()
         return table_values
