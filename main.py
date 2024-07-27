@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 if __name__ == '__main__':
     offers_in_database = [int(x[0]) for x in misc.MySQL.get_table('Kleinanzeigen', 'id')]
 
-    Kleinanzeigen.to_mysql(20359, radius=20, end_index=2464141260)
+    Kleinanzeigen.to_mysql(20359, radius=20, max_number=400)
 
 
 
