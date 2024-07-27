@@ -8,6 +8,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
 from config import chromedriver_path, webscraper_proxy
 
+# url = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
+
+# test = WebScraper(url)
+
 class WebScraper:
     """
     A web scraper using Selenium for automating web interactions.
@@ -38,10 +42,12 @@ class WebScraper:
         if self.proxy:
             chrome_options.add_argument('--proxy-server={}'.format(self.proxy))
         chrome_options.add_argument('--blink-settings=imagesEnabled=false')
+        chrome_options.headless = True
+
+
 
         # Initialize Chrome WebDriver instance
         self.driver = uc.Chrome(
-            headless=True,
             use_subprocess=True,
             driver_executable_path=self.chrome_driver_path,
             options=chrome_options,

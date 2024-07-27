@@ -41,7 +41,11 @@ class MySQL:
     def get_table(table, column):
         mydb = MySQL.connect()
         mycursor = mydb.cursor()
-        mycursor.execute("SELECT {column} FROM {table}".format(column = column, table=table))
+        if type(column)==str:
+            mycursor.execute("SELECT {column} FROM {table}".format(column = column, table=table))
+        if type(column)==list:
+            mycursor.execute("SELECT {column} FROM {table}".format(column = ', '.join(column), table=table))
+        mycursor.fetchall()
         table_values = mycursor.fetchall()
         mycursor.close()
         mydb.close()

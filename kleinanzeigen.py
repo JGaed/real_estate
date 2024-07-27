@@ -244,9 +244,14 @@ class Kleinanzeigen:
 
         def __get_price(self):
             """Extract and store the price of the offer."""
-            num1 = misc.get_numbers(misc.get_lines(self.content, 'adPrice:')[0][0])[0]
-            num2 = misc.get_numbers(misc.get_lines(self.content, 'adPrice:')[0][0])[1]
-            self.price = float(int(num1) + (int(num2) / 100))
+            try:
+                num1 = misc.get_numbers(misc.get_lines(self.content, 'adPrice:')[0][0])[0]
+                num2 = misc.get_numbers(misc.get_lines(self.content, 'adPrice:')[0][0])[1]
+                self.price = float(int(num1) + (int(num2) / 100))
+            except:
+                print('[PYTHON][KLEINANZ][OFFER_PAGE][POSTALCODE][WARNING] No Price found: {}'.format(self.url))
+                self.price = 999999999.99
+            
 
         def __get_postalcode(self):
             """Extract and store the postal code of the property."""
@@ -328,9 +333,9 @@ class Kleinanzeigen:
 if __name__ == "__main__":
     postalcode = "22303"
     radius = 20
-    pages = ([1,2,3,5])
-    end_index = 50
+    # pages = ([1,2,3])
+    # end_index = 50
     max_number = 100
 
     # df = Kleinanzeigen.create_df(postalcode, radius=radius, pages=pages, end_index=end_index)
-    Kleinanzeigen.to_mysql(postalcode, radius=radius, pages=pages, end_index=end_index, max_number=max_number)
+    Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)
