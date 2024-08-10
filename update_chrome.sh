@@ -7,7 +7,7 @@ sudo apt-get -y install chromium-browser
 
 # Install ChromeDriver.
 wget -N https://github.com/electron/electron/releases/download/v31.3.0/chromedriver-v31.3.0-linux-arm64.zip -P /tmp
-pwd=($pwd)
+pwd=$(pwd)
 cd /tmp
 unzip chromedriver*-arm64.zip -d ./unzip_chromedriver
 rm chromedriver*-arm64.zip

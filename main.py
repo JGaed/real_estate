@@ -3,14 +3,12 @@
 
 from kleinanzeigen import Kleinanzeigen
 import misc
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    offers_in_database = misc.MySQL.get_table('Kleinanzeigen', ['id', 'timestamp'], sort_by='timestamp', max_entries=10)
+    offers_in_database = misc.MySQL.get_table('Kleinanzeigen', ['id', 'date'], sort_by='id', max_entries=100, descanding=True)
+    ids_in_database = [x[0] for x in offers_in_database]
 
-    Kleinanzeigen.to_mysql(20359, radius=20, max_number=400)
+    Kleinanzeigen.to_mysql(20359, radius=20, end_index=ids_in_database)
 
 
 

@@ -17,7 +17,7 @@ class Kleinanzeigen:
     OFFERS_PER_PAGE = 25
 
     @classmethod
-    def create_df(cls, postalcode, radius=None, pages=None, end_index=None):
+    def create_df(cls, postalcode, radius=None, pages=None, end_index=None, max_number=None):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -28,7 +28,7 @@ class Kleinanzeigen:
         Returns:
             pd.DataFrame: DataFrame containing the scraped property listings.
         """
-        offers = cls.SearchPage(postalcode, radius=radius, pages=pages, end_index=end_index)
+        offers = cls.SearchPage(postalcode, radius=radius, pages=pages, end_index=end_index, max_number=max_number)
         df = pd.concat([cls.OfferPage(i).to_df() for i in offers.offers_indices], ignore_index=True)
         return df
 
@@ -335,5 +335,5 @@ if __name__ == "__main__":
     # end_index = 50
     max_number = 100
 
-    # df = Kleinanzeigen.create_df(postalcode, radius=radius, pages=pages, end_index=end_index)
-    Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)
+    df = Kleinanzeigen.create_df(postalcode, radius=radius, max_number=max_number)#, pages=pages, end_index=end_index)
+    # Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)

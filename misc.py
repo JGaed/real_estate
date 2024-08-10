@@ -38,8 +38,8 @@ class MySQL:
         mycursor.close()
         mydb.close()
 
-    def get_table(table, column, sort_by=None, max_entries=None):
-        print(table, column, sort_by, max_entries)
+    def get_table(table, column, sort_by=None, max_entries=None, descanding=False):
+        # print(table, column, sort_by, max_entries)
         mydb = MySQL.connect()
         mycursor = mydb.cursor()
         query_str = ''
@@ -49,9 +49,11 @@ class MySQL:
             query_str += ("SELECT {column} FROM {table}".format(column = ', '.join(column), table=table))
         if sort_by:
             query_str += (' ORDER BY {}'.format(sort_by))
+        if descanding:
+            query_str += (' DESC')
         if max_entries:
-            query_str += (' Limit {}'.format(str(max_entries)))
-        print(query_str)
+            query_str += (' LIMIT {}'.format(str(max_entries)))
+        # print(query_str)
         mycursor.execute(query_str)
         table_values = mycursor.fetchall()    
         mycursor.close()
@@ -68,7 +70,6 @@ class MySQL:
         except Exception as e:
             mydb.close()
             print(str(e))
-        
 
 def get_numbers(string_input):
     """
