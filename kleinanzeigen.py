@@ -3,6 +3,7 @@
 
 import re
 import misc
+from misc import dprint, debug
 import time
 import pandas as pd
 from webscraper import WebScraper
@@ -10,14 +11,16 @@ import dateutil.parser as dparser
 import pgeocode
 import datetime
 import numpy as np
+from config import mysql_table
 
 class Kleinanzeigen:
-    SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
+    # SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
+    SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-mieten/c203'
     OFFER_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-anzeige/{index}'
     OFFERS_PER_PAGE = 25
 
     @classmethod
-    def create_df(cls, postalcode, radius=None, pages=None, end_index=None, max_number=None):
+    def create_df(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -33,7 +36,7 @@ class Kleinanzeigen:
         return df
 
     @classmethod
-    def to_mysql(cls, postalcode, radius=None, pages=None, end_index=None, max_number=None):
+    def to_mysql(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -47,7 +50,7 @@ class Kleinanzeigen:
         """
         columns = ('postalcode', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp')
         offers = cls.SearchPage(postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
-        offers_in_database = [int(x[0]) for x in misc.MySQL.get_table('Kleinanzeigen', 'id')]
+        offers_in_database = [int(x[0]) for x in misc.MySQL.get_table(mysql_table, 'id')]
         new_offers = [x for x in offers.offers_indices if x not in offers_in_database]
         print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping offers: {}'.format(len(new_offers)))
         print(new_offers)
@@ -62,7 +65,7 @@ class Kleinanzeigen:
                 values.append(values_i)
             except Exception as e:
                 print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', i, e)
-        misc.MySQL.write_list('Kleinanzeigen', columns, values)
+        misc.MySQL.write_list(mysql_table, columns, values)
 
     class SearchPage():
         """
@@ -106,13 +109,15 @@ class Kleinanzeigen:
                 page.click_button_xpath('//*[@id="site-signin"]/div/div/a')
             except:
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] No Popup')
-            page.fill_form_id("site-search-area", self.postalcode)
+            if self.postalcode:
+                page.fill_form_id("site-search-area", self.postalcode)
             page.click_button_xpath('//*[@id="site-search-submit"]')
             url = page.get_current_url()
             url = url.replace('//', '<<<<')
             url = url.split('/')
             url.insert(-1, "seite:{page}")
             url = '/'.join(url).replace('<<<<', '//')
+            dprint(url)
             page.quit()
             return url
 
@@ -137,8 +142,10 @@ class Kleinanzeigen:
                 print(url_i)
                 page = WebScraper(url_i)
                 offer_indices_i = self.__get_offer_index(page.content.split('\n'))
+                dprint('max_page: {}'.format(max_page))
                 if not max_page:
                     max_page = self.__get_max_page(page.content)
+                dprint('max_page: {}'.format(max_page))
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current page:', page_i)
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current max page:', max_page)
                 self.offers_indices += offer_indices_i
@@ -167,8 +174,10 @@ class Kleinanzeigen:
             page.quit()
         
         def __get_max_page(self, content):
-            total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-2]
+            total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-1] # -2 for buying. DEBUG - FIX NEEDED
+            dprint('total_offers: {}'.format(total_offers))
             max_page = np.rint(total_offers/Kleinanzeigen.OFFERS_PER_PAGE)
+            dprint('max_page2: {}'.format(max_page))
             return int(max_page)
         
         def __get_offer_index(self, content, filter_out_top=True):
@@ -329,11 +338,11 @@ class Kleinanzeigen:
 
 # Example usage:
 if __name__ == "__main__":
-    postalcode = "22303"
-    radius = 20
+    # postalcode = "22303"
+    # radius = 20
     # pages = ([1,2,3])
     # end_index = 50
     max_number = 100
 
-    df = Kleinanzeigen.create_df(postalcode, radius=radius, max_number=max_number)#, pages=pages, end_index=end_index)
+    df = Kleinanzeigen.create_df(max_number=max_number)#, pages=pages, end_index=end_index)
     # Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)

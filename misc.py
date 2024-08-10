@@ -3,8 +3,9 @@
 
 import re
 import mysql.connector
-from config import mysql_host, mysql_password, mysql_user
+from config import mysql_host, mysql_password, mysql_user, mysql_database, debug
 import pandas as pd
+
 
 class MySQL:
     """
@@ -20,7 +21,7 @@ class MySQL:
             host=mysql_host,
             user=mysql_user,
             password=mysql_password,
-            database="real_estate"
+            database= mysql_database
         )
         return mydb
 
@@ -130,3 +131,7 @@ def get_floats(string):
             None
         
     return numbers
+
+def dprint(string):
+    if debug >0:
+        print(string)
