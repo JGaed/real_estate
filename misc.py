@@ -5,6 +5,8 @@ import re
 import mysql.connector
 from config import mysql_host, mysql_password, mysql_user, mysql_database, debug
 import pandas as pd
+import pickle
+import bz2
 
 
 class MySQL:
@@ -135,3 +137,27 @@ def get_floats(string):
 def dprint(string):
     if debug >0:
         print(string)
+
+# Load any compressed pickle file
+def decompress_pickle(file):
+    data = bz2.BZ2File(file, 'rb')
+    data = pickle.load(data)
+    return data
+    
+def compressed_pickle(title, data):
+    with bz2.BZ2File(title + '.pbz2', 'w') as f:
+        pickle.dump(data, f)
+
+# loads and returns a pickled objects
+def loosen(file):
+    pikd = open(file, 'rb')
+    data = pickle.load(pikd, encoding='latin1')
+    pikd.close()
+    return data
+
+# Saves the "data" with the "title" and adds the .pickle
+def full_pickle(title, data):
+    pikd = open(title + '.pickle', 'wb')
+    pickle.dump(data, pikd)
+    pikd.close()  
+   

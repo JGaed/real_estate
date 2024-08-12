@@ -3,7 +3,7 @@
 
 import re
 import misc
-from misc import dprint, debug
+from misc import dprint, debug, compressed_pickle, decompress_pickle
 import time
 import pandas as pd
 from webscraper import WebScraper
@@ -11,7 +11,8 @@ import dateutil.parser as dparser
 import pgeocode
 import datetime
 import numpy as np
-from config import mysql_table
+from config import mysql_table, tmp_folder
+import os
 
 class Kleinanzeigen:
     # SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
@@ -65,7 +66,10 @@ class Kleinanzeigen:
                 values.append(values_i)
             except Exception as e:
                 print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', i, e)
+        tmp_filename = "sql_data"+'-'+str(datetime.datetime.now())
+        compressed_pickle(tmp_folder+'/'+tmp_filename, values)
         misc.MySQL.write_list(mysql_table, columns, values)
+        os.remove(tmp_folder+'/'+tmp_filename)
 
     class SearchPage():
         """
