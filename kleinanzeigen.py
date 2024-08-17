@@ -13,10 +13,12 @@ import datetime
 import numpy as np
 from config import mysql_table, tmp_folder
 import os
+from bs4 import BeautifulSoup
+import json
 
 class Kleinanzeigen:
-    # SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
-    SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-mieten/c203'
+    # SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196' # Buy Apartments
+    SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-mieten/c203' # Rent Apartments
     OFFER_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-anzeige/{index}'
     OFFERS_PER_PAGE = 25
 
@@ -49,7 +51,7 @@ class Kleinanzeigen:
         Returns:
             None
         """
-        columns = ('postalcode', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp')
+        columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp')
         offers = cls.SearchPage(postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
         offers_in_database = [int(x[0]) for x in misc.MySQL.get_table(mysql_table, 'id')]
         new_offers = [x for x in offers.offers_indices if x not in offers_in_database]
@@ -60,16 +62,19 @@ class Kleinanzeigen:
             try:
                 offer = cls.OfferPage(i)
                 values_i = (
-                    offer.postalcode, offer.state, offer.state_code, offer.place, offer.price, offer.size,
+                    offer.title, offer.postalcode, json.dumps(offer.description), offer.state, offer.state_code, offer.place, offer.price, offer.size,
                     offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now()
                 )
                 values.append(values_i)
             except Exception as e:
                 print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', i, e)
-        tmp_filename = "sql_data"+'-'+str(datetime.datetime.now())
-        compressed_pickle(tmp_folder+'/'+tmp_filename, values)
+        tmp_filename = "sql_data"+'-'+str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+        tmp_file = tmp_folder+'/'+tmp_filename
+        dprint('Writing tmp file: {}'.format(tmp_file+'.pbz2'))
+        compressed_pickle(tmp_file, values)
         misc.MySQL.write_list(mysql_table, columns, values)
-        os.remove(tmp_folder+'/'+tmp_filename)
+        dprint('Deleting tmp file: {}'.format(tmp_file+'.pbz2'))
+        os.remove(tmp_file+'.pbz2')
 
     class SearchPage():
         """
@@ -219,9 +224,10 @@ class Kleinanzeigen:
             # Initialize instance variables
             self.index = offer_index
             self.url = Kleinanzeigen.OFFER_TEMPLATE_URL.format(index=self.index)
-            self.content = self.__get_offer_content()
+            self.__get_offer_content()
             self.__set_details_NULL()  # Set initial details to None
             self.__get_title()
+            self.__get_description()
             self.__get_date()
             self.__get_price()
             self.__get_postalcode()
@@ -229,7 +235,7 @@ class Kleinanzeigen:
             self.__get_all_details()
             self.__get_filtered_details()
             self.__print()
-
+        
         def __set_details_NULL(self):
             """Set initial values of details attributes to None."""
             self.size = None
@@ -240,9 +246,10 @@ class Kleinanzeigen:
         def __get_offer_content(self):
             """Get the content of the offer page using a WebScraper instance."""
             page = WebScraper(self.url)
+            self.content_raw = page.content
+            self.content = page.content.split('\n')
             content = page.content.split('\n')
             page.quit()
-            return content
 
         def __get_title(self):
             """Extract and store the title of the offer."""
@@ -273,6 +280,15 @@ class Kleinanzeigen:
                 self.postalcode = int(number)
             except:
                 print('[PYTHON][KLEINANZ][OFFER_PAGE][POSTALCODE][WARNING] Not type(int): {}'.format(number))
+
+        def __get_description(self):
+            try:
+                parsed_html = BeautifulSoup(self.content_raw,"html.parser")
+                data = parsed_html.find(itemprop="description")
+                description = list(filter(None, data.get_text(separator='\n').split('\n')))
+                self.description = [x.strip() for x in description]
+            except:
+                print('[PYTHON][KLEINANZ][OFFER_PAGE][POSTALCODE][WARNING] No description found')
 
         def __get_city(self):
             """Query and store the state, state code, and city of the property location."""
@@ -342,11 +358,15 @@ class Kleinanzeigen:
 
 # Example usage:
 if __name__ == "__main__":
-    # postalcode = "22303"
-    # radius = 20
-    # pages = ([1,2,3])
+    postalcode = "22303"
+    radius = 20
+    pages = ([1,2,3])
     # end_index = 50
-    max_number = 100
+    max_number = 10
 
-    df = Kleinanzeigen.create_df(max_number=max_number)#, pages=pages, end_index=end_index)
-    # Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)
+    # df = Kleinanzeigen.create_df(max_number=max_number)#, pages=pages, end_index=end_index)
+    Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)
+
+    # page1 = Kleinanzeigen.OfferPage(offer_index=2838757655)
+    # page2 = Kleinanzeigen.OfferPage(offer_index=2838751225)
+    # self = page
