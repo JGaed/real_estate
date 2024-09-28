@@ -8,10 +8,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
 from config import chromedriver_path, webscraper_proxy
 
-# url = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
-
-# test = WebScraper(url)
-
 class WebScraper:
     """
     A web scraper using Selenium for automating web interactions.
@@ -42,9 +38,11 @@ class WebScraper:
         if self.proxy:
             chrome_options.add_argument('--proxy-server={}'.format(self.proxy))
         chrome_options.add_argument('--blink-settings=imagesEnabled=false')
-        chrome_options.headless = True
-
-
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--enable-javascript')
+        chrome_options.add_argument('--disable-gpu')        
+        # chrome_options.headless = True
 
         # Initialize Chrome WebDriver instance
         self.driver = uc.Chrome(
@@ -104,3 +102,13 @@ class WebScraper:
     def quit(self):
         """Quit the browser instance."""
         self.driver.quit()
+
+    def shutdown(self):
+        self.driver.close()
+        self.driver.quit()
+        
+
+
+# url = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
+
+# test = WebScraper(url)

@@ -15,6 +15,7 @@ from config import mysql_table, tmp_folder
 import os
 from bs4 import BeautifulSoup
 import json
+import subprocess
 
 class Kleinanzeigen:
     # SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196' # Buy Apartments
@@ -51,21 +52,26 @@ class Kleinanzeigen:
         Returns:
             None
         """
-        columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp')
+        columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp', 'num')
         offers = cls.SearchPage(postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
         offers_in_database = [int(x[0]) for x in misc.MySQL.get_table(mysql_table, 'id')]
+        number_offers_database = len(offers_in_database)
         new_offers = [x for x in offers.offers_indices if x not in offers_in_database]
         print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping offers: {}'.format(len(new_offers)))
         print(new_offers)
         values = []
+        offer_num = number_offers_database
         for i in new_offers:
             try:
                 offer = cls.OfferPage(i)
                 values_i = (
                     offer.title, offer.postalcode, json.dumps(offer.description), offer.state, offer.state_code, offer.place, offer.price, offer.size,
-                    offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now()
+                    offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now(), offer_num
                 )
                 values.append(values_i)
+                print('[PYTHON][KLEINANZ][TO_MYSQL][Progress] Offer: {current}/{max}'.format(current=offer_num - number_offers_database, max=len(new_offers)))
+                offer_num += 1
+                subprocess.run('kill $(pgrep -f chromium)')
             except Exception as e:
                 print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', i, e)
         tmp_filename = "sql_data"+'-'+str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
@@ -127,7 +133,7 @@ class Kleinanzeigen:
             url.insert(-1, "seite:{page}")
             url = '/'.join(url).replace('<<<<', '//')
             dprint(url)
-            page.quit()
+            page.shutdown()
             return url
 
         def __init_search_pages(self):
@@ -148,15 +154,15 @@ class Kleinanzeigen:
                 else:
                     url_i = self.url_search_page.format(page=page_i)
 
-                print(url_i)
+                dprint(url_i)
                 page = WebScraper(url_i)
                 offer_indices_i = self.__get_offer_index(page.content.split('\n'))
                 dprint('max_page: {}'.format(max_page))
                 if not max_page:
                     max_page = self.__get_max_page(page.content)
                 dprint('max_page: {}'.format(max_page))
-                print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current page:', page_i)
-                print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current max page:', max_page)
+                print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Page: {page_i}/{max_page}'.format(page_i=page_i, max_page = max_page))
+                # print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current max page:', )
                 self.offers_indices += offer_indices_i
 
                 # Check if end_index condition is met
@@ -178,9 +184,9 @@ class Kleinanzeigen:
                     print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Max page number reached')
                     break
 
-                page.close()
+                page.shutdown()
 
-            page.quit()
+            page.shutdown()
         
         def __get_max_page(self, content):
             total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-1] # -2 for buying. DEBUG - FIX NEEDED
@@ -249,7 +255,8 @@ class Kleinanzeigen:
             self.content_raw = page.content
             self.content = page.content.split('\n')
             content = page.content.split('\n')
-            page.quit()
+
+            page.shutdown()
 
         def __get_title(self):
             """Extract and store the title of the offer."""
@@ -286,7 +293,10 @@ class Kleinanzeigen:
                 parsed_html = BeautifulSoup(self.content_raw,"html.parser")
                 data = parsed_html.find(itemprop="description")
                 description = list(filter(None, data.get_text(separator='\n').split('\n')))
-                self.description = [x.strip() for x in description]
+                description = [x.strip() for x in description]
+                description = ' '.join(description)
+                self.description = description
+
             except:
                 print('[PYTHON][KLEINANZ][OFFER_PAGE][POSTALCODE][WARNING] No description found')
 
@@ -358,7 +368,7 @@ class Kleinanzeigen:
 
 # Example usage:
 if __name__ == "__main__":
-    postalcode = "22303"
+    postalcode = "20359"
     radius = 20
     pages = ([1,2,3])
     # end_index = 50
@@ -367,6 +377,6 @@ if __name__ == "__main__":
     # df = Kleinanzeigen.create_df(max_number=max_number)#, pages=pages, end_index=end_index)
     Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)
 
-    # page1 = Kleinanzeigen.OfferPage(offer_index=2838757655)
+    page1 = Kleinanzeigen.OfferPage(offer_index=2859617436)
     # page2 = Kleinanzeigen.OfferPage(offer_index=2838751225)
     # self = page
