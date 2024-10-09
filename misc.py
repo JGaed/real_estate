@@ -3,8 +3,12 @@
 
 import re
 import mysql.connector
-from config import mysql_host, mysql_password, mysql_user
+from config import mysql_host, mysql_password, mysql_user, mysql_database, debug
 import pandas as pd
+import pickle
+import bz2
+from bs4 import BeautifulSoup
+
 
 class MySQL:
     """
@@ -20,7 +24,8 @@ class MySQL:
             host=mysql_host,
             user=mysql_user,
             password=mysql_password,
-            database="real_estate"
+            database= mysql_database,
+            charset='utf8mb4'
         )
         return mydb
 
@@ -70,6 +75,17 @@ class MySQL:
         except Exception as e:
             mydb.close()
             print(str(e))
+
+def clean_html(content):
+    # Decode HTML entities like &lt; to < and &gt; to >
+    content = content.replace('&lt;', '<').replace('&gt;', '>')
+
+    # Use BeautifulSoup again to parse the content and extract text
+    content_soup = BeautifulSoup(content, 'html.parser')
+
+    # Get only the text and remove any HTML leftovers
+    text_content = content_soup.get_text(separator=' ', strip=True)
+    return text_content
 
 def get_numbers(string_input):
     """
@@ -130,3 +146,31 @@ def get_floats(string):
             None
         
     return numbers
+
+def dprint(string):
+    if debug >0:
+        print(string)
+
+# Load any compressed pickle file
+def decompress_pickle(file):
+    data = bz2.BZ2File(file, 'rb')
+    data = pickle.load(data)
+    return data
+    
+def compressed_pickle(title, data):
+    with bz2.BZ2File(title + '.pbz2', 'w') as f:
+        pickle.dump(data, f)
+
+# loads and returns a pickled objects
+def loosen(file):
+    pikd = open(file, 'rb')
+    data = pickle.load(pikd, encoding='latin1')
+    pikd.close()
+    return data
+
+# Saves the "data" with the "title" and adds the .pickle
+def full_pickle(title, data):
+    pikd = open(title + '.pickle', 'wb')
+    pickle.dump(data, pikd)
+    pikd.close()  
+   

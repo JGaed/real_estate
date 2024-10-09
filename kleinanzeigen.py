@@ -3,6 +3,7 @@
 
 import re
 import misc
+from misc import dprint, compressed_pickle, clean_html
 import time
 import pandas as pd
 from webscraper import WebScraper
@@ -10,14 +11,20 @@ import dateutil.parser as dparser
 import pgeocode
 import datetime
 import numpy as np
+from config import mysql_table, tmp_folder
+import os
+from bs4 import BeautifulSoup
+import json
+import subprocess
 
 class Kleinanzeigen:
-    SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196'
+    # SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196' # Buy Apartments
+    SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-mieten/c203' # Rent Apartments
     OFFER_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-anzeige/{index}'
     OFFERS_PER_PAGE = 25
 
     @classmethod
-    def create_df(cls, postalcode, radius=None, pages=None, end_index=None, max_number=None):
+    def create_df(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -33,7 +40,7 @@ class Kleinanzeigen:
         return df
 
     @classmethod
-    def to_mysql(cls, postalcode, radius=None, pages=None, end_index=None, max_number=None):
+    def to_mysql(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -45,24 +52,39 @@ class Kleinanzeigen:
         Returns:
             None
         """
-        columns = ('postalcode', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp')
+        columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp', 'num')
         offers = cls.SearchPage(postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
-        offers_in_database = [int(x[0]) for x in misc.MySQL.get_table('Kleinanzeigen', 'id')]
+        offers_in_database = [int(x[0]) for x in misc.MySQL.get_table(mysql_table, 'id')]
+        number_offers_database = len(offers_in_database)
         new_offers = [x for x in offers.offers_indices if x not in offers_in_database]
         print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping offers: {}'.format(len(new_offers)))
         print(new_offers)
         values = []
+        offer_num = number_offers_database
         for i in new_offers:
             try:
                 offer = cls.OfferPage(i)
                 values_i = (
-                    offer.postalcode, offer.state, offer.state_code, offer.place, offer.price, offer.size,
-                    offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now()
+                    offer.title, offer.postalcode, offer.description, offer.state, offer.state_code, offer.place, offer.price, offer.size,
+                    offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now(), offer_num
                 )
                 values.append(values_i)
+                print('[PYTHON][KLEINANZ][TO_MYSQL][Progress] Offer: {current}/{max}'.format(current=offer_num - number_offers_database+1, max=len(new_offers)))
+                offer_num += 1
+                del offer
+                # subprocess.run('kill $(pgrep -f chromium)')
             except Exception as e:
                 print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', i, e)
-        misc.MySQL.write_list('Kleinanzeigen', columns, values)
+        tmp_filename = "sql_data"+'-'+str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+        tmp_file = tmp_folder+'/'+tmp_filename
+        dprint('Writing tmp file: {}'.format(tmp_file+'.pbz2'))
+        try:
+            compressed_pickle(tmp_file, values)
+        except Exception as e:
+            print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', e)        
+        misc.MySQL.write_list(mysql_table, columns, values)
+        dprint('Deleting tmp file: {}'.format(tmp_file+'.pbz2'))
+        os.remove(tmp_file+'.pbz2')
 
     class SearchPage():
         """
@@ -106,14 +128,16 @@ class Kleinanzeigen:
                 page.click_button_xpath('//*[@id="site-signin"]/div/div/a')
             except:
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] No Popup')
-            page.fill_form_id("site-search-area", self.postalcode)
+            if self.postalcode:
+                page.fill_form_id("site-search-area", self.postalcode)
             page.click_button_xpath('//*[@id="site-search-submit"]')
             url = page.get_current_url()
             url = url.replace('//', '<<<<')
             url = url.split('/')
             url.insert(-1, "seite:{page}")
             url = '/'.join(url).replace('<<<<', '//')
-            page.quit()
+            dprint(url)
+            page.shutdown()
             return url
 
         def __init_search_pages(self):
@@ -134,13 +158,15 @@ class Kleinanzeigen:
                 else:
                     url_i = self.url_search_page.format(page=page_i)
 
-                print(url_i)
+                dprint(url_i)
                 page = WebScraper(url_i)
                 offer_indices_i = self.__get_offer_index(page.content.split('\n'))
+                dprint('max_page: {}'.format(max_page))
                 if not max_page:
                     max_page = self.__get_max_page(page.content)
-                print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current page:', page_i)
-                print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current max page:', max_page)
+                dprint('max_page: {}'.format(max_page))
+                print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Page: {page_i}/{max_page}'.format(page_i=page_i, max_page = max_page))
+                # print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current max page:', )
                 self.offers_indices += offer_indices_i
 
                 # Check if end_index condition is met
@@ -162,13 +188,15 @@ class Kleinanzeigen:
                     print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Max page number reached')
                     break
 
-                page.close()
+                page.shutdown()
 
-            page.quit()
+            page.shutdown()
         
         def __get_max_page(self, content):
-            total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-2]
+            total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-1] # -2 for buying. DEBUG - FIX NEEDED
+            dprint('total_offers: {}'.format(total_offers))
             max_page = np.rint(total_offers/Kleinanzeigen.OFFERS_PER_PAGE)
+            dprint('max_page2: {}'.format(max_page))
             return int(max_page)
         
         def __get_offer_index(self, content, filter_out_top=True):
@@ -206,9 +234,10 @@ class Kleinanzeigen:
             # Initialize instance variables
             self.index = offer_index
             self.url = Kleinanzeigen.OFFER_TEMPLATE_URL.format(index=self.index)
-            self.content = self.__get_offer_content()
+            self.__get_offer_content()
             self.__set_details_NULL()  # Set initial details to None
             self.__get_title()
+            self.__get_description()
             self.__get_date()
             self.__get_price()
             self.__get_postalcode()
@@ -216,7 +245,7 @@ class Kleinanzeigen:
             self.__get_all_details()
             self.__get_filtered_details()
             self.__print()
-
+        
         def __set_details_NULL(self):
             """Set initial values of details attributes to None."""
             self.size = None
@@ -227,9 +256,11 @@ class Kleinanzeigen:
         def __get_offer_content(self):
             """Get the content of the offer page using a WebScraper instance."""
             page = WebScraper(self.url)
+            self.content_raw = page.content
+            self.content = page.content.split('\n')
             content = page.content.split('\n')
-            page.quit()
-            return content
+
+            page.shutdown()
 
         def __get_title(self):
             """Extract and store the title of the offer."""
@@ -260,6 +291,31 @@ class Kleinanzeigen:
                 self.postalcode = int(number)
             except:
                 print('[PYTHON][KLEINANZ][OFFER_PAGE][POSTALCODE][WARNING] Not type(int): {}'.format(number))
+
+        def __get_description(self):
+            try:
+                parsed_html = BeautifulSoup(self.content_raw,"html.parser")
+                # print('###### parsed #####')
+                # print(parsed_html)
+                # data = parsed_html.find(itemprop="description")
+                data = parsed_html.find('meta', attrs={'itemprop': 'description'})
+                # print('###### data #####')
+                # print(data)
+                # description = list(filter(None, data.get_text(separator='\n').split('\n')))
+                description_raw = data['content'] if data else None
+                description = clean_html(description_raw)
+                # print('###### description1 #####')
+                # print(description)
+                # description = [x.strip() for x in description]
+                # print('###### description2 #####')
+                # print(description)
+                # description = ' '.join(description)
+                # print('###### description3 #####')
+                # print(description)
+                self.description = description
+
+            except:
+                print('[PYTHON][KLEINANZ][OFFER_PAGE][POSTALCODE][WARNING] No description found')
 
         def __get_city(self):
             """Query and store the state, state code, and city of the property location."""
@@ -329,11 +385,15 @@ class Kleinanzeigen:
 
 # Example usage:
 if __name__ == "__main__":
-    postalcode = "22303"
+    postalcode = "20359"
     radius = 20
-    # pages = ([1,2,3])
+    pages = ([1,2,3])
     # end_index = 50
-    max_number = 100
+    max_number = 10
 
-    df = Kleinanzeigen.create_df(postalcode, radius=radius, max_number=max_number)#, pages=pages, end_index=end_index)
+    # df = Kleinanzeigen.create_df(max_number=max_number)#, pages=pages, end_index=end_index)
     # Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)
+
+    page1 = Kleinanzeigen.OfferPage(offer_index=2885365052)
+    # page2 = Kleinanzeigen.OfferPage(offer_index=2838751225)
+    # self = page

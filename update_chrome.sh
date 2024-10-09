@@ -2,11 +2,11 @@
 CHROMEDRIVER_PATH='/home/omloo/projects/real_estate/chromedriver'
 
 # Install Chrome.
-sudo apt-get -y update
-sudo apt-get -y install chromium-browser
+sudo dnf -y update
+sudo dnf -y install chromium
 
 # Install ChromeDriver.
-wget -N https://github.com/electron/electron/releases/download/v31.3.0/chromedriver-v31.3.0-linux-arm64.zip -P /tmp
+wget -N https://github.com/electron/electron/releases/download/v32.1.2/chromedriver-v32.1.2-linux-arm64.zip -P /tmp
 pwd=$(pwd)
 cd /tmp
 unzip chromedriver*-arm64.zip -d ./unzip_chromedriver
