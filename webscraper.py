@@ -22,12 +22,10 @@ class WebScraper:
         driver (webdriver.Chrome): Chrome WebDriver instance.
         content (str): Page source content of the loaded web page.
     """
-    def __init__(self, url):
-        self.url = url
+    def __init__(self):
         self.chrome_driver_path = chromedriver_path
         self.proxy = webscraper_proxy
-        self.__init_driver()
-        self.content = self.driver.page_source
+        self.driver = self.__init_driver()
         
     def __init_driver(self):
         # Determine the version of Chrome
@@ -45,13 +43,19 @@ class WebScraper:
         # chrome_options.headless = True
 
         # Initialize Chrome WebDriver instance
-        self.driver = uc.Chrome(
+        driver = uc.Chrome(
             use_subprocess=True,
             driver_executable_path=self.chrome_driver_path,
             options=chrome_options,
             version_main=self.chrome_version
         )
-        self.driver.get(self.url)
+        return driver
+    
+    def url(self, url):
+        self.driver.get(url)
+    
+    def content(self):
+        return self.driver.page_source
     
     def snapshot(self, filename):
         """Take a screenshot of the current page and save it to a file."""

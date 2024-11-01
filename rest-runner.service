@@ -1,0 +1,18 @@
+[Unit]
+Description=rest-runner
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=omloo
+ExecStart=/home/omloo/projects/real_estate/StartService.sh
+
+# Redirect standard output and error to log files
+StandardOutput=append:/var/log/omloo/rest-runner.log
+StandardError=append:/var/log/omloo/rest-runner.err
+
+[Install]
+WantedBy=multi-user.target
