@@ -30,14 +30,38 @@ class MySQL:
         return mydb
 
     def write_list(table, columns, values):
+        print(table)
+        print(columns)
+        print(values)
         mydb = MySQL.connect()
         mycursor = mydb.cursor()
+        # if len(values)>1:
+        
+        # else:
+        #     number_values = '%s'
+        if type(columns)==str:
+            column_names = f"({columns})"
+            number_values = '%s'
+        else:
+            column_names = str(columns).replace("'", "")
+            number_values = ', '.join(['%s' for x in range(len(columns))])
+            
         sql = "INSERT INTO {table} {columns} VALUES ({number_values})".format(
             table=table,
-            columns=str(columns).replace("'", ""),
-            number_values=', '.join(['%s' for x in range(len(columns))])
+            #columns=str(columns).replace("'", ""),
+            columns = column_names,
+            #number_values=', '.join(['%s' for x in range(len(columns))])
+            number_values=number_values
         )
-        mycursor.executemany(sql, values)
+        
+        if len(values)>1:
+            print(sql)
+            print(values)
+            mycursor.executemany(sql, values)
+        else:
+            print(sql)
+            print(values[0])
+            mycursor.execute(sql, values[0])
         mydb.commit()
         print('[MYSQL]', mycursor.rowcount, "lines added to database")
         mycursor.close()
@@ -134,6 +158,13 @@ def chunkIt(seq, num):
         last += avg
 
     return out
+
+# Yield successive n-sized
+# chunks from l.
+def divide_chunks(list1, chunk_size):
+    
+    # looping till length l
+    return [list1[i:i + chunk_size] for i in range(0, len(list1), chunk_size)] 
 
 def get_floats(string):
     numbers = []

@@ -3,7 +3,7 @@
 
 import re
 import misc
-from misc import dprint, compressed_pickle, clean_html
+from misc import dprint, compressed_pickle, clean_html, divide_chunks
 import time
 import pandas as pd
 from webscraper import WebScraper
@@ -11,9 +11,10 @@ import dateutil.parser as dparser
 import pgeocode
 import datetime
 import numpy as np
-from config import mysql_table, tmp_folder
+from config import mysql_table, mysql_table_error, tmp_folder, timeout, chunk_size
 import os
 from bs4 import BeautifulSoup
+from timeout import time_limit
 
 class Kleinanzeigen:
     # SEARCH_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-wohnung-kaufen/c196' # Buy Apartments
@@ -25,7 +26,7 @@ class Kleinanzeigen:
         offers_in_database = misc.MySQL.get_table(mysql_table, ['id', 'date'], sort_by='id', max_entries=100, descanding=True)
         ids_in_database = [x[0] for x in offers_in_database]
 
-        Kleinanzeigen.to_mysql(postalcode=postalcode, radius=radius, end_index=ids_in_database, max_number=1000)
+        Kleinanzeigen.to_mysql(postalcode=postalcode, radius=radius, max_number=1000, end_index=ids_in_database)
         # df = Kleinanzeigen.create_df(20359, radius=20, max_number=3)
 
     @classmethod
@@ -40,9 +41,12 @@ class Kleinanzeigen:
         Returns:
             pd.DataFrame: DataFrame containing the scraped property listings.
         """
-        offers = cls.SearchPage(postalcode, radius=radius, pages=pages, end_index=end_index, max_number=max_number)
-        df = pd.concat([cls.OfferPage(i).to_df() for i in offers.offers_indices], ignore_index=True)
+        webdriver = WebScraper()
+        offers = cls.SearchPage(webdriver= webdriver, postalcode=postalcode, radius=radius, pages=pages, end_index=end_index, max_number=max_number)
+        df = pd.concat([cls.OfferPage(webdriver, i).to_df() for i in offers.offers_indices], ignore_index=True)
+        webdriver.shutdown()
         return df
+        
 
     @classmethod
     def to_mysql(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
@@ -60,41 +64,49 @@ class Kleinanzeigen:
         webdriver = WebScraper()
         columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp', 'num')
         offers = cls.SearchPage(webdriver, postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
+        error_offers = [int(x[0]) for x in misc.MySQL.get_table(mysql_table_error, 'id')]
         offers_in_database = [int(x[0]) for x in misc.MySQL.get_table(mysql_table, 'id')]
         number_offers_database = len(offers_in_database)
-        new_offers = [x for x in offers.offers_indices if x not in offers_in_database]
-        if len(new_offers) > 0:
-            print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping offers: {}'.format(len(new_offers)))
-            print(new_offers)
-            values = []
-            offer_num = number_offers_database
-            for i in new_offers:
+        new_offers = [x for x in offers.offers_indices if x not in (offers_in_database + error_offers)]
+        new_offers = new_offers[::-1]
+        print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] New offers: {}'.format(len(new_offers)))
+        webdriver.shutdown()
+        chunked_offers = divide_chunks(new_offers, chunk_size)
+        if len(chunked_offers) > 0:
+            for new_offers_i in chunked_offers:
+                webdriver = WebScraper()
+                print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping offers: {}'.format(len(new_offers_i)))
+                print(new_offers_i)
+                values = []
+                offer_num = number_offers_database
+                for i in new_offers_i:
+                    try:
+                        with time_limit(timeout):
+                            offer = cls.OfferPage(webdriver, i)
+                            values_i = (
+                                offer.title, offer.postalcode, offer.description, offer.state, offer.state_code, offer.place, offer.price, offer.size,
+                                offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now(), offer_num
+                            )
+                            values.append(values_i)
+                            print('[PYTHON][KLEINANZ][TO_MYSQL][Progress] Offer: {current}/{max}'.format(current=offer_num - number_offers_database+1, max=len(new_offers_i)))
+                            offer_num += 1
+                            del offer
+                        # subprocess.run('kill $(pgrep -f chromium)')
+                    except Exception as e:
+                        misc.MySQL.write_list(mysql_table_error, ('id'), [[i]])
+                        print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', i, e)
+                webdriver.shutdown()
+                tmp_filename = "sql_data"+'-'+str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+                tmp_file = tmp_folder + '/' + tmp_filename
+                print('[PYTHON][KLEINANZ] Writing tmp file: {}'.format(tmp_file+'.pbz2'))
                 try:
-                    offer = cls.OfferPage(webdriver, i)
-                    values_i = (
-                        offer.title, offer.postalcode, offer.description, offer.state, offer.state_code, offer.place, offer.price, offer.size,
-                        offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now(), offer_num
-                    )
-                    values.append(values_i)
-                    print('[PYTHON][KLEINANZ][TO_MYSQL][Progress] Offer: {current}/{max}'.format(current=offer_num - number_offers_database+1, max=len(new_offers)))
-                    offer_num += 1
-                    del offer
-                    # subprocess.run('kill $(pgrep -f chromium)')
+                    compressed_pickle(tmp_file, values)
                 except Exception as e:
-                    print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', i, e)
-            webdriver.shutdown()
-            tmp_filename = "sql_data"+'-'+str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
-            tmp_file = tmp_folder+'/'+tmp_filename
-            print('[PYTHON][KLEINANZ] Writing tmp file: {}'.format(tmp_file+'.pbz2'))
-            try:
-                compressed_pickle(tmp_file, values)
-            except Exception as e:
-                print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', e)        
-            misc.MySQL.write_list(mysql_table, columns, values)
-            print('[PYTHON][KLEINANZ] Deleting tmp file: {}'.format(tmp_file+'.pbz2'))
-            os.remove(tmp_file+'.pbz2')
+                    print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', e)        
+                misc.MySQL.write_list(mysql_table, columns, values)
+                print('[PYTHON][KLEINANZ] Deleting tmp file: {}'.format(tmp_file+'.pbz2'))
+                os.remove(tmp_file+'.pbz2')
         else:
-            webdriver.shutdown()
             print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] No new offers found')
 
     class SearchPage():
