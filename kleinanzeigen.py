@@ -11,7 +11,7 @@ import dateutil.parser as dparser
 import pgeocode
 import datetime
 import numpy as np
-from config import mysql_table, mysql_table_error, tmp_folder, timeout, chunk_size, mysql_columns, mysql_columns_err, mysql_types, mysql_types_err 
+from config import tmp_folder, timeout, chunk_size, mysql_columns, mysql_columns_err, mysql_types, mysql_types_err 
 from mysql_wrapper import MySQL
 import os
 from bs4 import BeautifulSoup
@@ -24,17 +24,20 @@ class Kleinanzeigen:
     OFFERS_PER_PAGE = 25
 
     def runner(postalcode, radius, tablename=None):
+        
         if tablename:
-            mysql_table_error = tablename+"error_index"
+            mysql_table_err = tablename+"error_index"
             mysql_table = tablename
+        else:
+            from config import mysql_table, mysql_table_err
 
-        MySQL.create_table(mysql_table_error, mysql_columns_err, mysql_types_err)
+        MySQL.create_table(mysql_table_err, mysql_columns_err, mysql_types_err)
         MySQL.create_table(mysql_table, mysql_columns, mysql_types)
         
         offers_in_database = MySQL.get_table(mysql_table, ['id', 'date'], sort_by='id', max_entries=100, descending=True)
         ids_in_database = [x[0] for x in offers_in_database]
 
-        Kleinanzeigen.to_mysql(postalcode=postalcode, radius=radius, max_number=1000, end_index=ids_in_database, tablename=tablename)
+        Kleinanzeigen.to_mysql(mysql_table=mysql_table, mysql_table_err=mysql_table_err, postalcode=postalcode, radius=radius, max_number=1000, end_index=ids_in_database)
         # df = Kleinanzeigen.create_df(20359, radius=20, max_number=3)
 
     @classmethod
@@ -57,7 +60,7 @@ class Kleinanzeigen:
         
 
     @classmethod
-    def to_mysql(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None, tablename=None):
+    def to_mysql(cls, mysql_table, mysql_table_err, postalcode=None, radius=None, pages=None, end_index=None, max_number=None, ):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -69,13 +72,10 @@ class Kleinanzeigen:
         Returns:
             None
         """
-        if tablename:
-            mysql_table_error = tablename+"error_index"
-            mysql_table = tablename
         webdriver = WebScraper()
         columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp', 'num')
         offers = cls.SearchPage(webdriver, postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
-        error_offers = [int(x[0]) for x in MySQL.get_table(mysql_table_error, 'id')]
+        error_offers = [int(x[0]) for x in MySQL.get_table(mysql_table_err, 'id')]
         offers_in_database = [int(x[0]) for x in MySQL.get_table(mysql_table, 'id')]
         number_offers_database = len(offers_in_database)
         new_offers = [x for x in offers.offers_indices if x not in (offers_in_database + error_offers)]
