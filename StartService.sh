@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PYTHON_EXE=/home/omloo/software/micromamba/envs/rest/bin/python
+PYTHON_EXE=/home/omloo/software/mamba/envs/rest/bin/python
 SCRIPT_PATH=/home/omloo/projects/real_estate/
 LOG_PATH=/var/log/omloo/
 

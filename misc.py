@@ -2,103 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import re
-import mysql.connector
-from config import mysql_host, mysql_password, mysql_user, mysql_database, debug
+from config import debug
 import pandas as pd
 import pickle
 import bz2
 from bs4 import BeautifulSoup
-
-
-class MySQL:
-    """
-    Represents a MySQL database interaction utility.
-
-    Methods:
-        connect(): Establishes a connection to the MySQL database.
-        write_list(table, columns, values): Writes a list of values into the specified table.
-        get_table(table, database): Retrieves data from a table in the specified database.
-    """
-    def connect():
-        mydb = mysql.connector.connect(
-            host=mysql_host,
-            user=mysql_user,
-            password=mysql_password,
-            database= mysql_database,
-            charset='utf8mb4'
-        )
-        return mydb
-
-    def write_list(table, columns, values):
-        print(table)
-        print(columns)
-        print(values)
-        mydb = MySQL.connect()
-        mycursor = mydb.cursor()
-        # if len(values)>1:
-        
-        # else:
-        #     number_values = '%s'
-        if type(columns)==str:
-            column_names = f"({columns})"
-            number_values = '%s'
-        else:
-            column_names = str(columns).replace("'", "")
-            number_values = ', '.join(['%s' for x in range(len(columns))])
-            
-        sql = "INSERT INTO {table} {columns} VALUES ({number_values})".format(
-            table=table,
-            #columns=str(columns).replace("'", ""),
-            columns = column_names,
-            #number_values=', '.join(['%s' for x in range(len(columns))])
-            number_values=number_values
-        )
-        
-        if len(values)>1:
-            print(sql)
-            print(values)
-            mycursor.executemany(sql, values)
-        else:
-            print(sql)
-            print(values[0])
-            mycursor.execute(sql, values[0])
-        mydb.commit()
-        print('[MYSQL]', mycursor.rowcount, "lines added to database")
-        mycursor.close()
-        mydb.close()
-
-    def get_table(table, column, sort_by=None, max_entries=None, descanding=False):
-        # print(table, column, sort_by, max_entries)
-        mydb = MySQL.connect()
-        mycursor = mydb.cursor()
-        query_str = ''
-        if type(column)==str:
-            query_str += ("SELECT {column} FROM {table}".format(column = column, table=table))
-        if type(column)==list:
-            query_str += ("SELECT {column} FROM {table}".format(column = ', '.join(column), table=table))
-        if sort_by:
-            query_str += (' ORDER BY {}'.format(sort_by))
-        if descanding:
-            query_str += (' DESC')
-        if max_entries:
-            query_str += (' LIMIT {}'.format(str(max_entries)))
-        # print(query_str)
-        mycursor.execute(query_str)
-        table_values = mycursor.fetchall()    
-        mycursor.close()
-        mydb.close()
-        return table_values
-    
-    def get_dataframe(table, column):
-        try:
-            mydb = MySQL.connect()
-            query = "Select {column} from {table};".format(column = column, table=table)
-            result_dataFrame = pd.read_sql(query,mydb)
-            mydb.close() #close the connection
-            return result_dataFrame
-        except Exception as e:
-            mydb.close()
-            print(str(e))
 
 def clean_html(content):
     # Decode HTML entities like &lt; to < and &gt; to >

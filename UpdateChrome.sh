@@ -2,8 +2,8 @@
 CHROMEDRIVER_PATH='/home/omloo/projects/real_estate/chromedriver'
 
 # Install Chrome.
-sudo apt -y update
-sudo apt -y install chromium
+sudo dnf -y update
+sudo dnf -y install chromium
 
 get_latest_release() {
   curl --silent "https://api.github.com/repos/$1/releases/latest" | # Get latest release from GitHub api

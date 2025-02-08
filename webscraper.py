@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import os
+import numpy as np
 import undetected_chromedriver as uc
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.chrome.service import Service
 from config import chromedriver_path, webscraper_proxy
 
 class WebScraper:
@@ -29,25 +31,38 @@ class WebScraper:
         
     def __init_driver(self):
         # Determine the version of Chrome
-        self.chrome_version = int(os.popen('chromium --version').read().split()[1].split('.')[0])
+        self.chrome_version = int(os.popen('chromium-browser --version').read().split()[1].split('.')[0])
+
+        self.port = np.random.randint(9000,15000)
         
         # Configure Chrome options
         chrome_options = uc.ChromeOptions()
         if self.proxy:
-            chrome_options.add_argument('--proxy-server={}'.format(self.proxy))
+            chrome_options.add_argument(f'--proxy-server={self.proxy}')
+        chrome_options.add_argument('--remote-debugging-pipe')
         chrome_options.add_argument('--blink-settings=imagesEnabled=false')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--headless')
         chrome_options.add_argument('--enable-javascript')
-        chrome_options.add_argument('--disable-gpu')        
-        # chrome_options.headless = True
+        chrome_options.add_argument('--disable-gpu') 
+        chrome_options.add_argument(f'--port:{self.port}')       
+        chrome_options.headless = True
 
-        # Initialize Chrome WebDriver instance
-        driver = uc.Chrome(
-            use_subprocess=True,
-            driver_executable_path=self.chrome_driver_path,
+        # # Initialize Chrome WebDriver instance
+        # driver = uc.Chrome(
+        #     use_subprocess=True,
+        #     driver_executable_path=self.chrome_driver_path,
+        #     options=chrome_options,
+        #     version_main=self.chrome_version,
+        #     port=38008
+        # )
+        # return driver
+
+        service = Service(executable_path=self.chrome_driver_path, use_subprocess=True, port=self.port)
+        driver = webdriver.Chrome(
+            service=service,
             options=chrome_options,
-            version_main=self.chrome_version
+            #version_main=self.chrome_version
         )
         return driver
     
