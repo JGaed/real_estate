@@ -1,5 +1,4 @@
 import mysql.connector
-from config import mysql_host, mysql_password, mysql_user, mysql_database
 import pandas as pd
 
 
@@ -14,19 +13,22 @@ class MySQL:
             Retrieves data from a table in the specified database with optional sorting and limiting.
         get_dataframe(table, column): Returns a DataFrame of specified columns from a table.
     """
-
-    @staticmethod
-    def connect():
+    def __init__(self, mysql_host, mysql_user, mysql_password, mysql_database):
+        self.host = mysql_host
+        self.user = mysql_user
+        self.password = mysql_password
+        self.database = mysql_database
+    
+    def connect(self):
         return mysql.connector.connect(
-            host=mysql_host,
-            user=mysql_user,
-            password=mysql_password,
-            database=mysql_database,
+            host=self.host,
+            user=self.user,
+            password=self.password,
+            database=self.database,
             charset='utf8mb4'
         )
 
-    @staticmethod
-    def create_table(table, columns, types):
+    def create_table(self, table, columns, types):
         """
         Creates a table if it doesn't exist.
 
@@ -35,7 +37,7 @@ class MySQL:
             columns (list): A list of column names.
             types (list): A list of column types corresponding to the column names.
         """
-        mydb = MySQL.connect()
+        mydb = self.connect()
         mycursor = mydb.cursor()
 
         # Check if the table exists
@@ -54,9 +56,8 @@ class MySQL:
         mycursor.close()
         mydb.close()
 
-    @staticmethod
-    def write_list(table, columns, values):
-        mydb = MySQL.connect()
+    def write_list(self, table, columns, values):
+        mydb = self.connect()
         mycursor = mydb.cursor()
 
         if isinstance(columns, str):
@@ -77,9 +78,8 @@ class MySQL:
         mycursor.close()
         mydb.close()
 
-    @staticmethod
-    def get_table(table, column, sort_by=None, max_entries=None, descending=False):
-        mydb = MySQL.connect()
+    def get_table(self, table, column, sort_by=None, max_entries=None, descending=False):
+        mydb = self.connect()
         mycursor = mydb.cursor()
 
         column_str = ', '.join(column) if isinstance(column, list) else column
@@ -96,12 +96,31 @@ class MySQL:
         mycursor.close()
         mydb.close()
         return table_values
+    
+    def execute(self, query, fetch=False):
+        mydb = self.connect()
+        mycursor = mydb.cursor()
+        mycursor.execute(query)
+        
+        if fetch:
+            fetch = mycursor.fetchall()
+            mydb.commit()
+            mycursor.close()
+            mydb.close()
+            return fetch
+        else:
+            mydb.commit()
+            mycursor.close()
+            mydb.close()
 
-    @staticmethod
-    def get_dataframe(table, column):
+    def get_dataframe(self, table, column, add_query=None):
         try:
-            mydb = MySQL.connect()
-            query = f"SELECT {column} FROM {table};"
+            mydb = self.connect()
+            query = f"SELECT {column} FROM {table}"
+            if add_query:
+                query += " " + add_query
+            query += ";"
+            print(query)
             result_df = pd.read_sql(query, mydb)
             mydb.close()
             return result_df

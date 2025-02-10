@@ -11,7 +11,7 @@ import dateutil.parser as dparser
 import pgeocode
 import datetime
 import numpy as np
-from config import tmp_folder, timeout, chunk_size, mysql_columns, mysql_columns_err, mysql_types, mysql_types_err 
+from config import tmp_folder, timeout, chunk_size, mysql_columns, mysql_columns_err, mysql_types, mysql_types_err, mysql_host, mysql_user, mysql_database, mysql_password
 from mysql_wrapper import MySQL
 import os
 from bs4 import BeautifulSoup
@@ -23,22 +23,30 @@ class Kleinanzeigen:
     OFFER_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-anzeige/{index}'
     OFFERS_PER_PAGE = 25
 
-    def runner(postalcode, radius, tablename=None):
-        
+    def runner(MySQL_DB, postalcode, radius, tablename=None):
         if tablename:
             mysql_table_err = tablename+"error_index"
             mysql_table = tablename
         else:
             from config import mysql_table, mysql_table_err
 
-        MySQL.create_table(mysql_table_err, mysql_columns_err, mysql_types_err)
-        MySQL.create_table(mysql_table, mysql_columns, mysql_types)
+        mysql_obj = MySQL_DB
+        mysql_obj.create_table(mysql_table_err, mysql_columns_err, mysql_types_err)
+        mysql_obj.create_table(mysql_table, mysql_columns, mysql_types)
         
-        offers_in_database = MySQL.get_table(mysql_table, ['id', 'date'], sort_by='id', max_entries=100, descending=True)
+        offers_in_database = mysql_obj.get_table(mysql_table, ['id', 'date'], 
+                                                 sort_by='id', 
+                                                 max_entries=100, 
+                                                 descending=True)
+        
         ids_in_database = [x[0] for x in offers_in_database]
-
-        Kleinanzeigen.to_mysql(mysql_table=mysql_table, mysql_table_err=mysql_table_err, postalcode=postalcode, radius=radius, max_number=1000, end_index=ids_in_database)
-        # df = Kleinanzeigen.create_df(20359, radius=20, max_number=3)
+        Kleinanzeigen.to_mysql(mysql_obj=mysql_obj, 
+                               mysql_table=mysql_table, 
+                               mysql_table_err=mysql_table_err, 
+                               postalcode=postalcode, 
+                               radius=radius, 
+                               max_number=100, 
+                               end_index=ids_in_database)
 
     @classmethod
     def create_df(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
@@ -60,7 +68,7 @@ class Kleinanzeigen:
         
 
     @classmethod
-    def to_mysql(cls, mysql_table, mysql_table_err, postalcode=None, radius=None, pages=None, end_index=None, max_number=None, ):
+    def to_mysql(cls, mysql_obj, mysql_table, mysql_table_err, postalcode=None, radius=None, pages=None, end_index=None, max_number=None, ):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -75,8 +83,8 @@ class Kleinanzeigen:
         webdriver = WebScraper()
         columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp', 'num')
         offers = cls.SearchPage(webdriver, postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
-        error_offers = [int(x[0]) for x in MySQL.get_table(mysql_table_err, 'id')]
-        offers_in_database = [int(x[0]) for x in MySQL.get_table(mysql_table, 'id')]
+        error_offers = [int(x[0]) for x in mysql_obj.get_table(mysql_table_err, 'id')]
+        offers_in_database = [int(x[0]) for x in mysql_obj.get_table(mysql_table, 'id')]
         number_offers_database = len(offers_in_database)
         new_offers = [x for x in offers.offers_indices if x not in (offers_in_database + error_offers)]
         new_offers = new_offers[::-1]
@@ -104,7 +112,7 @@ class Kleinanzeigen:
                             del offer
                         # subprocess.run('kill $(pgrep -f chromium)')
                     except Exception as e:
-                        MySQL.write_list(mysql_table_error, ('id'), [[i]])
+                        mysql_obj.write_list(mysql_table_err, ('id'), [[i]])
                         print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', i, e)
                 
                 if len(values)>0:
@@ -115,7 +123,7 @@ class Kleinanzeigen:
                         compressed_pickle(tmp_file, values)
                     except Exception as e:
                         print('[PYTHON][KLEINANZ][TO_MYSQL][ERROR]', e)        
-                    MySQL.write_list(mysql_table, columns, values)
+                    mysql_obj.write_list(mysql_table, columns, values)
                     print('[PYTHON][KLEINANZ] Deleting tmp file: {}'.format(tmp_file+'.pbz2'))
                     os.remove(tmp_file+'.pbz2')
                 else:

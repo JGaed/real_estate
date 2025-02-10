@@ -1,5 +1,7 @@
 import datetime as dt
 import time
+import mysql_wrapper as MySQL
+from config import mysql_host, mysql_user, mysql_database, mysql_password
 from kleinanzeigen import Kleinanzeigen
 
 INTERVALL = 300
@@ -13,7 +15,12 @@ while True:
     print('### Start Run')
     print('### ' + start_time.date().isoformat())
     print('### ' + start_time.time().isoformat(timespec='seconds'))
-    Kleinanzeigen.runner(postalcode=POSTALCODE,
+    mysql_db = MySQL(mysql_host=mysql_host, 
+                          mysql_user = mysql_user, 
+                          mysql_database = mysql_database, 
+                          mysql_password = mysql_password)
+    
+    Kleinanzeigen.runner(mysql_db, postalcode=POSTALCODE,
                          radius=RADIUS)
 
     finished_on = dt.datetime.now()
