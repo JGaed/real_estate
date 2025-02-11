@@ -68,7 +68,10 @@ class WebScraper:
     
     def url(self, url):
         self.driver.get(url)
-    
+
+    def current_url(self):
+        return self.driver.current_url
+
     def content(self):
         return self.driver.page_source
     

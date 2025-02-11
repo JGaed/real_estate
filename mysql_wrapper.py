@@ -48,6 +48,7 @@ class MySQL:
             # Create the table if it doesn't exist
             column_definitions = ', '.join([f"{col} {typ}" for col, typ in zip(columns, types)])
             create_table_sql = f"CREATE TABLE {table} ({column_definitions})"
+            print(create_table_sql)
             mycursor.execute(create_table_sql)
             print(f'[MYSQL] Table {table} created')
         else:

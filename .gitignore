@@ -5,3 +5,4 @@
 /.gitgnore
 /main_21255.py
 /chromedriver
+.env

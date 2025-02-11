@@ -11,7 +11,7 @@ import dateutil.parser as dparser
 import pgeocode
 import datetime
 import numpy as np
-from config import tmp_folder, timeout, chunk_size, mysql_columns, mysql_columns_err, mysql_types, mysql_types_err, mysql_host, mysql_user, mysql_database, mysql_password
+from config import tmp_folder, timeout, chunk_size, mysql_columns, mysql_columns_err, mysql_types, mysql_types_err
 from mysql_wrapper import MySQL
 import os
 from bs4 import BeautifulSoup
@@ -68,7 +68,7 @@ class Kleinanzeigen:
         
 
     @classmethod
-    def to_mysql(cls, mysql_obj, mysql_table, mysql_table_err, postalcode=None, radius=None, pages=None, end_index=None, max_number=None, ):
+    def to_mysql(cls, mysql_obj, mysql_table, mysql_table_err, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -81,7 +81,7 @@ class Kleinanzeigen:
             None
         """
         webdriver = WebScraper()
-        columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp', 'num')
+        columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp')
         offers = cls.SearchPage(webdriver, postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
         error_offers = [int(x[0]) for x in mysql_obj.get_table(mysql_table_err, 'id')]
         offers_in_database = [int(x[0]) for x in mysql_obj.get_table(mysql_table, 'id')]
@@ -104,7 +104,7 @@ class Kleinanzeigen:
                             offer = cls.OfferPage(webdriver, i)
                             values_i = (
                                 offer.title, offer.postalcode, offer.description, offer.state, offer.state_code, offer.place, offer.price, offer.size,
-                                offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now(), offer_num
+                                offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now()
                             )
                             values.append(values_i)
                             print('[PYTHON][KLEINANZ][TO_MYSQL][Progress] Offer: {current}/{max}'.format(current=offer_num - number_offers_database+1, max=len(new_offers_i)))
@@ -166,10 +166,10 @@ class Kleinanzeigen:
         def __get_index_page_url(self):
             # page = WebScraper(Kleinanzeigen.SEARCH_TEMPLATE_URL)
             self.driver.url(Kleinanzeigen.SEARCH_TEMPLATE_URL)
-            time.sleep(1)
+            time.sleep(2)
             try:
                 self.driver.click_button_id("gdpr-banner-accept")
-                time.sleep(3)
+                time.sleep(2)
             except:
                 print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] No Popup')
             try:
@@ -205,14 +205,23 @@ class Kleinanzeigen:
                 else:
                     url_i = self.url_search_page.format(page=page_i)
 
-                dprint(url_i)
+                previous_url = self.driver.current_url()
+                dprint(f"[PYTHON][KLEINANZ][SEARCH_PAGE] Previous URL: {previous_url}")
+                dprint(f"[PYTHON][KLEINANZ][SEARCH_PAGE] Constructed URL: {url_i}")
                 self.driver.url(url_i)
+                redirect_url = self.driver.current_url()
+                dprint(f"[PYTHON][KLEINANZ][SEARCH_PAGE] Current URL: {redirect_url}")
+                if previous_url == redirect_url:
+                    print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] End of search pages reached.')
+                    break
+
                 offer_indices_i = self.__get_offer_index(self.driver.content().split('\n'))
-                dprint('max_page: {}'.format(max_page))
-                if not max_page:
-                    max_page = self.__get_max_page(self.driver.content())
-                dprint('max_page: {}'.format(max_page))
-                print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Page: {page_i}/{max_page}'.format(page_i=page_i, max_page = max_page))
+                # dprint('max_page: {}'.format(max_page))
+                # if not max_page:
+                #     max_page = self.__get_max_page(self.driver.content())
+                # dprint('max_page: {}'.format(max_page))
+                # print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Page: {page_i}/{max_page}'.format(page_i=page_i, max_page = max_page))
+                print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Page: {page_i}'.format(page_i=page_i))
                 # print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Current max page:', )
                 self.offers_indices += offer_indices_i
 
@@ -235,12 +244,12 @@ class Kleinanzeigen:
                     print('[PYTHON][KLEINANZ][SEARCH_PAGE][PROGRESS] Max page number reached')
                     break
         
-        def __get_max_page(self, content):
-            total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-1] # -2 for buying. DEBUG - FIX NEEDED
-            dprint('total_offers: {}'.format(total_offers))
-            max_page = np.rint(total_offers/Kleinanzeigen.OFFERS_PER_PAGE)
-            dprint('max_page2: {}'.format(max_page))
-            return int(max_page)
+        # def __get_max_page(self, content):
+        #     total_offers = misc.get_floats(misc.get_lines(content.split('\n'), "breadcrump-summary")[0][0])[-1] # -2 for buying. DEBUG - FIX NEEDED
+        #     dprint('total_offers: {}'.format(total_offers))
+        #     max_page = np.rint(total_offers/Kleinanzeigen.OFFERS_PER_PAGE)
+        #     dprint('max_page2: {}'.format(max_page))
+        #     return int(max_page)
         
         def __get_offer_index(self, content, filter_out_top=True):
             self.offer_lines = misc.get_lines(content, 'data-adid=')[1]
@@ -419,17 +428,17 @@ class Kleinanzeigen:
 
 # Example usage:
 if __name__ == "__main__":
-    postalcode = "20359"
-    radius = 20
-    pages = ([1,2,3])
+    postalcode = "21255"
+    radius = 10
+    # pages = ([1,2,3])
     # end_index = 50
-    max_number = 10
+    max_number = 1000
 
     # df = Kleinanzeigen.create_df(max_number=max_number)#, pages=pages, end_index=end_index)
     # Kleinanzeigen.to_mysql(postalcode, radius=radius, max_number=max_number)
     driver = WebScraper()
-    # test = Kleinanzeigen.SearchPage(driver, postalcode, radius, pages=pages, max_number=max_number)
-    page1 = Kleinanzeigen.OfferPage(driver, offer_index=2934471877)
+    test = Kleinanzeigen.SearchPage(driver, postalcode, radius, max_number=max_number)
+    #page1 = Kleinanzeigen.OfferPage(driver, offer_index=2934471877)
     driver.quit()
 
     # page1 = Kleinanzeigen.OfferPage(offer_index=2885365052)
