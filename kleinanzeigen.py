@@ -25,7 +25,7 @@ class Kleinanzeigen:
 
     def runner(MySQL_DB, postalcode, radius, tablename=None):
         if tablename:
-            mysql_table_err = tablename+"error_index"
+            mysql_table_err = tablename+"_error_index"
             mysql_table = tablename
         else:
             from config import mysql_table, mysql_table_err
