@@ -79,7 +79,7 @@ class MySQL:
         mycursor.close()
         mydb.close()
 
-    def get_table(self, table, column, sort_by=None, max_entries=None, descending=False):
+    def get_table(self, table, column, sort_by=None, max_entries=None, descending=False, add_query=None):
         mydb = self.connect()
         mycursor = mydb.cursor()
 
@@ -91,7 +91,9 @@ class MySQL:
                 query += " DESC"
         if max_entries:
             query += f" LIMIT {max_entries}"
-
+        if add_query:
+            query += " " + add_query
+        query += ";"
         mycursor.execute(query)
         table_values = mycursor.fetchall()
         mycursor.close()

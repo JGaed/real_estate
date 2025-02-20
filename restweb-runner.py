@@ -21,13 +21,6 @@ restweb_main = MySQL(
     mysql_password=config.mysql_password
 )
 
-restweb_searchjobs = MySQL(
-    mysql_host=config.mysql_host,
-    mysql_user=config.mysql_user,
-    mysql_database=config.mysql_restweb_searchjobs_db,
-    mysql_password=config.mysql_password
-)
-
 restweb_matching_ids = MySQL(
     mysql_host=config.mysql_host,
     mysql_user=config.mysql_user,
@@ -103,27 +96,72 @@ def worker(entry):
 
     # Define table name based on job details
     tablename = f"job_{job_id}"
-    
-    # Run Kleinanzeigen search
+
+    # Create a table for matching IDs if it doesn't exist
+    restweb_matching_ids.create_table(
+        table=tablename,
+        columns=config.mysql_columns_matching_ids,
+        types=config.mysql_types_matching_ids
+    )
+
+    restweb_main.create_table(
+        table=config.mysql_results_table,
+        columns=config.mysql_columns,
+        types=config.mysql_types
+    )
+
+    restweb_main.create_table(
+        table=config.mysql_error_table,
+        columns=config.mysql_columns_err,
+        types=config.mysql_types_err
+    )
+
+    job_matching_ids = [x[0] for x in restweb_matching_ids.get_table(tablename, ['id'], 
+                                                 sort_by='created_at', 
+                                                 max_entries=100, 
+                                                 descending=True)]
+
+    print(job_matching_ids)
+    job_ids = [x[0] for x in restweb_main.get_table(config.mysql_results_table, ["id"], add_query=f"WHERE id_index in ({','.join(map(str, job_matching_ids))})")]
+ 
+    print(job_ids)
     attempts = 0
-    while attempts < 3:
+    while attempts <= 5:
+        attempts += 1
         try:
-            Kleinanzeigen.runner(
-                MySQL_DB=restweb_searchjobs,
-                postalcode=zipcode,
-                radius=radius,
-                tablename=tablename
-            )
+            new_offers = Kleinanzeigen.get_search_offers(postalcode=zipcode, 
+                                radius=radius, 
+                                max_number=100,  
+                                end_index=job_ids)
             break
         except Exception as e:
-            print(f"[REST][RESWEB-RUNNER] Failed calling runner: {e}")
+            print(f"[REST][RESTWEB-RUNNER] Failed calling get_offer_indicies: {e}")
 
+    # existing_result_ids = restweb_main.get_table("results", ['id'])
+    # existing_result_ids = [x[0] for x in existing_result_ids]  
+
+    # Sraping new offers and add to results table
+    attempts = 0
+    while attempts <= 5:
+        attempts += 1
+        try:
+            Kleinanzeigen.offers_to_mysql(offers = new_offers,
+                                          mysql_obj=restweb_main,
+                                          mysql_table=config.mysql_results_table,
+                                          mysql_table_err=config.mysql_error_table)
+            break
+        except Exception as e:
+            print(f"[REST][RESTWEB-RUNNER] Failed calling get_offer_indicies: {e}")
+
+
+    new_offers_ids = [x for x in new_offers.offers_indices]
     # Fetch new entries from the database
-    df_entry = restweb_searchjobs.get_dataframe(
-        table=tablename,
+    df_entry = restweb_main.get_dataframe(
+        table='results',
         column="*",
-        add_query=f"WHERE timestamp > '{job_start_time}'"
+        add_query=f"WHERE timestamp > '{last_run}' AND id in ({','.join(map(str, new_offers_ids))})"
     )
+
 
     # Filter the DataFrame based on job criteria
     df_entry_filtered = filter_dataframe(
@@ -136,13 +174,6 @@ def worker(entry):
         sqm_max,
         filter_include,
         filter_exclude
-    )
-
-    # Create a table for matching IDs if it doesn't exist
-    restweb_matching_ids.create_table(
-        table=tablename,
-        columns=config.mysql_columns_matching_ids,
-        types=config.mysql_types_matching_ids
     )
 
     # If there are matching results, write them to the database and notify via API
@@ -165,9 +196,8 @@ def worker(entry):
         }
 
         # Send the request to the API
-        
         response = requests.post(config.api_url+"/notify", json=payload, headers=headers)
-        print(f"[REST][RESWEB-RUNNER] Send {len(df_entry_filtered)} offers to api for {job_id}")
+        print(f"[REST][RESWEB-RUNNER] Send {len(df_entry_filtered)} offers to api for Job {job_id}")
 
 def outer_loop():
     """Continuously check for new jobs and process them."""
@@ -175,17 +205,17 @@ def outer_loop():
         print("[REST][RESWEB-RUNNER] Checking for jobs to run")
 
         # Fetch new jobs that are active and haven't been run in the last 5 minutes
-        new_entries = restweb_main.execute(
-            query="SELECT * FROM search_jobs WHERE is_active = 1 AND last_run < NOW() - INTERVAL 5 MINUTE",
+        jobs_to_execute = restweb_main.execute(
+            query="SELECT * FROM search_jobs WHERE is_active = 1 AND last_run < (CONVERT_TZ(NOW(), @@session.time_zone, 'Europe/Berlin') - INTERVAL 5 MINUTE);",
             fetch=True
         )
-        print(new_entries)
+        print(jobs_to_execute)
 
         # Process each new job
-        for entry in new_entries:
-            print(f'## START: {entry}')
-            worker(entry)
-            job_id = entry[0]
+        for job in jobs_to_execute:
+            print(f'## START: {job}')
+            worker(job)
+            job_id = job[0]
 
             # Update the last_run timestamp for the job
             restweb_main.execute(

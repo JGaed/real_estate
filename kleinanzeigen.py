@@ -23,7 +23,7 @@ class Kleinanzeigen:
     OFFER_TEMPLATE_URL = 'https://www.kleinanzeigen.de/s-anzeige/{index}'
     OFFERS_PER_PAGE = 25
 
-    def runner(MySQL_DB, postalcode, radius, tablename=None):
+    def runner(MySQL_DB, postalcode, radius, tablename=None, exclude_ids=None):
         if tablename:
             mysql_table_err = tablename+"_error_index"
             mysql_table = tablename
@@ -40,13 +40,18 @@ class Kleinanzeigen:
                                                  descending=True)
         
         ids_in_database = [x[0] for x in offers_in_database]
-        Kleinanzeigen.to_mysql(mysql_obj=mysql_obj, 
-                               mysql_table=mysql_table, 
-                               mysql_table_err=mysql_table_err, 
-                               postalcode=postalcode, 
+        new_offers = Kleinanzeigen.get_search_offers(postalcode=postalcode, 
                                radius=radius, 
                                max_number=100, 
-                               end_index=ids_in_database)
+                               end_index=ids_in_database,
+                               exclude_ids=exclude_ids)
+
+
+
+        Kleinanzeigen.offers_to_mysql(offers= new_offers,
+                                      mysql_obj=mysql_obj, 
+                                      mysql_table=mysql_table,
+                                      mysql_table_err=mysql_table_err)
 
     @classmethod
     def create_df(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
@@ -61,14 +66,27 @@ class Kleinanzeigen:
             pd.DataFrame: DataFrame containing the scraped property listings.
         """
         webdriver = WebScraper()
-        offers = cls.SearchPage(webdriver= webdriver, postalcode=postalcode, radius=radius, pages=pages, end_index=end_index, max_number=max_number)
+        offers = cls.SearchPage(webdriver= webdriver, 
+                                postalcode=postalcode, 
+                                radius=radius, 
+                                pages=pages, 
+                                end_index=end_index, 
+                                max_number=max_number)
         df = pd.concat([cls.OfferPage(webdriver, i).to_df() for i in offers.offers_indices], ignore_index=True)
         webdriver.shutdown()
         return df
         
+    
+    @classmethod
+    def get_search_offers(cls, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
+        webdriver = WebScraper()
+        offers = cls.SearchPage(webdriver, postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
+        print('[PYTHON][KLEINANZ][GET_OFFERS][PROGRESS] New offers: {}'.format(offers))
+        webdriver.shutdown()
+        return offers
 
     @classmethod
-    def to_mysql(cls, mysql_obj, mysql_table, mysql_table_err, postalcode=None, radius=None, pages=None, end_index=None, max_number=None):
+    def offers_to_mysql(cls, offers, mysql_obj, mysql_table, mysql_table_err, exclude_ids=None):
         """
         Args:
             postalcode (str): The postal code to search for properties.
@@ -80,25 +98,30 @@ class Kleinanzeigen:
         Returns:
             None
         """
-        webdriver = WebScraper()
         columns = ('title', 'postalcode', 'description', 'state', 'state_code', 'place', 'price', 'size', 'rooms', 'floor', 'date', 'id', 'timestamp')
-        offers = cls.SearchPage(webdriver, postalcode, radius, pages=pages, end_index=end_index, max_number=max_number)
+
         error_offers = [int(x[0]) for x in mysql_obj.get_table(mysql_table_err, 'id')]
         offers_in_database = [int(x[0]) for x in mysql_obj.get_table(mysql_table, 'id')]
-        number_offers_database = len(offers_in_database)
-        new_offers = [x for x in offers.offers_indices if x not in (offers_in_database + error_offers)]
-        new_offers = new_offers[::-1]
-        print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] New offers: {}'.format(len(new_offers)))
-        webdriver.shutdown()
-        chunked_offers = divide_chunks(new_offers, chunk_size)
+        dprint(f"[PYTHON][KLEINANZ][TO_MYSQL] Offers already in database: {[x for x in offers.offers_indices if x in (offers_in_database + error_offers)]}")
+        if not exclude_ids:
+            offers = [x for x in offers.offers_indices if x not in (offers_in_database + error_offers)]
+        elif exclude_ids:
+            offers = [x for x in offers.offers_indices if x not in (offers_in_database + error_offers + exclude_ids)]
+            
+        
+        offers = offers[::-1]
+
+        total_offers = len(offers)
+        chunked_offers = divide_chunks(offers, chunk_size)
+        print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping total {} offers divided with chunksize of {} '.format(total_offers, chunk_size))
         if len(chunked_offers) > 0:
             webdriver = WebScraper()
-            for new_offers_i in chunked_offers:
-                print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping offers: {}'.format(len(new_offers_i)))
-                print(new_offers_i)
+            for offers_i in chunked_offers:
+                print('[PYTHON][KLEINANZ][TO_MYSQL][PROGRESS] Scraping offers: {}'.format(len(offers_i)))
+                print(offers_i)
                 values = []
-                offer_num = number_offers_database
-                for i in new_offers_i:
+                offer_num = 0
+                for i in offers_i:
                     try:
                         with time_limit(timeout):
                             offer = cls.OfferPage(webdriver, i)
@@ -107,7 +130,7 @@ class Kleinanzeigen:
                                 offer.rooms, offer.floor, offer.date.date(), offer.index, datetime.datetime.now()
                             )
                             values.append(values_i)
-                            print('[PYTHON][KLEINANZ][TO_MYSQL][Progress] Offer: {current}/{max}'.format(current=offer_num - number_offers_database+1, max=len(new_offers_i)))
+                            print('[PYTHON][KLEINANZ][TO_MYSQL][Progress] Offer: {current}/{max}'.format(current=offer_num+1, max=len(offers_i)))
                             offer_num += 1
                             del offer
                         # subprocess.run('kill $(pgrep -f chromium)')
